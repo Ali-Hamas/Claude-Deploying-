@@ -1,4 +1,5 @@
-NUL
+﻿NUL
 .env
 *.db
+node_modules/
 .claude/

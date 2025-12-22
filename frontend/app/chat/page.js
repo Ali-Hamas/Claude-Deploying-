@@ -9,11 +9,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function ChatPage() {
   const { messages, sendMessage, isLoading, conversationId, clearConversation } = useChat();
   const [inputValue, setInputValue] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
-  // Check authentication on component mount
   useEffect(() => {
+    setIsMounted(true);
     if (!isAuthenticated()) {
       router.push('/login');
     }
@@ -47,7 +48,8 @@ export default function ChatPage() {
     router.push('/login');
   };
 
-  if (!isAuthenticated()) {
+  // Prevent hydration mismatch: render nothing or loading state until mounted
+  if (!isMounted || !isAuthenticated()) {
     return (
       <div className="flex items-center justify-center min-h-screen text-white">
         <div className="text-center">
@@ -130,8 +132,8 @@ export default function ChatPage() {
                 >
                   <div
                     className={`max-w-[85%] rounded-2xl px-6 py-4 shadow-lg backdrop-blur-md border ${message.role === 'user'
-                        ? 'bg-blue-600/80 text-white border-blue-500/30 rounded-br-sm'
-                        : 'bg-white/10 text-gray-100 border-white/10 rounded-bl-sm'
+                      ? 'bg-blue-600/80 text-white border-blue-500/30 rounded-br-sm'
+                      : 'bg-white/10 text-gray-100 border-white/10 rounded-bl-sm'
                       }`}
                   >
                     <div className="whitespace-pre-wrap leading-relaxed">{message.content}</div>

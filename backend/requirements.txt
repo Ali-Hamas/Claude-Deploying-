@@ -8,6 +8,7 @@ requests>=2.32.0
 # Database
 sqlalchemy>=2.0.0
 sqlmodel>=0.0.22
+psycopg2-binary>=2.9.9
 
 # Authentication
 passlib>=1.7.4

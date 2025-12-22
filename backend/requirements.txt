@@ -21,5 +21,8 @@ openai-agents>=0.0.3
 # Async Support
 aiohttp>=3.9.0
 
+# Dapr SDK
+dapr>=1.14.0
+
 # HTTP Multipart
 python-multipart>=0.0.9

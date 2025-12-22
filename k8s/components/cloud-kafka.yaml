@@ -1,0 +1,23 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: kafka-pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      # This is the address from your screenshot
+      value: "d53tga3rcoacstirsss0.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
+    - name: saslUsername
+      value: "todo-user"
+    - name: saslPassword
+      value: "BlhRCGKtFQSwVnzhYN39vqOB8aAV0D"
+    - name: saslMechanism
+      value: "SCRAM-SHA-256"
+    - name: authRequired
+      value: "true"
+    - name: tlsCa
+      value: ""
+    - name: consumerGroup
+      value: "todo-group"

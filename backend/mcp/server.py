@@ -35,13 +35,21 @@ def get_skill(session: Session, user_id: int = 1) -> TodoManagementSkill:
 
 # Define the tools that will be available to the AI agent
 @server.tool("add_task")
-async def add_task_tool(title: str, description: str = "") -> dict:
+async def add_task_tool(title: str, description: str = "", due_date: str = None) -> dict:
     """
-    Add a new task to the todo list
+    Add a new task to the todo list.
+
+    Args:
+        title: The title of the task (required)
+        description: Optional description of the task
+        due_date: Optional due date/time in ISO 8601 format (e.g., "2025-12-25T15:00:00")
+
+    Returns:
+        JSON object containing task_id, status, title, and due_date
     """
     with get_db_session() as session:
         skill = get_skill(session)
-        return skill.add_task(title, description)
+        return skill.add_task(title, description, due_date=due_date)
 
 
 @server.tool("list_tasks")

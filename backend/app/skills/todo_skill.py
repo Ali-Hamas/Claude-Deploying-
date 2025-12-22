@@ -70,37 +70,59 @@ class TodoManagementSkill:
             return task
         return None
 
-    def add_task(self, title: str, description: str = "") -> Dict[str, Any]:
+    def add_task(self, title: str, description: str = "", due_date: str = None) -> Dict[str, Any]:
         """
         Add a new task to the todo list.
 
         Args:
             title: The title of the task
             description: Optional description of the task
+            due_date: Optional due date/time in ISO 8601 format (e.g., "2025-12-25T15:00:00")
 
         Returns:
             A structured JSON response confirming the action
         """
         try:
+            # Parse due_date if provided
+            parsed_due_date = None
+            if due_date:
+                try:
+                    parsed_due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                except (ValueError, AttributeError) as e:
+                    return {
+                        "success": False,
+                        "action": "add_task",
+                        "error": f"Invalid due_date format: {due_date}",
+                        "message": f"Invalid due_date format. Please use ISO 8601 format (e.g., 2025-12-25T15:00:00)"
+                    }
+
             task = Task(
                 title=title,
                 description=description,
                 user_id=self._user_id,
-                status=TaskStatus.pending
+                status=TaskStatus.pending,
+                due_date=parsed_due_date
             )
             self._session.add(task)
             self._session.commit()
             self._session.refresh(task)
 
-            return {
+            response = {
                 "success": True,
                 "action": "add_task",
                 "task_id": task.id,
                 "title": task.title,
                 "description": task.description,
                 "status": task.status.value,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
                 "message": f"Task '{task.title}' has been created successfully."
             }
+
+            if task.due_date:
+                response["message"] += f" Due: {task.due_date.strftime('%Y-%m-%d at %I:%M %p')}"
+
+            return response
+
         except Exception as e:
             self._session.rollback()
             return {

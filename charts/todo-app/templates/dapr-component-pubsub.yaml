@@ -1,0 +1,16 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: {{ .Values.dapr.components.pubsub.name }}
+  labels:
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  type: {{ .Values.dapr.components.pubsub.type }}
+  version: {{ .Values.dapr.components.pubsub.version }}
+  metadata:
+  {{- range .Values.dapr.components.pubsub.metadata }}
+  - name: {{ .name }}
+    value: {{ .value | quote }}
+  {{- end }}

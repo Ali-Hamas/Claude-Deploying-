@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.frontend.name }}
+  labels:
+    app: {{ .Values.frontend.name }}
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.frontend.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.frontend.name }}
+        {{- range $key, $value := .Values.labels }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+      annotations:
+        # Dapr sidecar annotations
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "{{ .Values.frontend.dapr.appId }}"
+        dapr.io/app-port: "{{ .Values.frontend.dapr.appPort }}"
+        dapr.io/http-port: "{{ .Values.frontend.dapr.httpPort }}"
+        dapr.io/grpc-port: "{{ .Values.frontend.dapr.grpcPort }}"
+        dapr.io/log-level: "{{ .Values.frontend.dapr.logLevel }}"
+        dapr.io/enable-api-logging: "true"
+        {{- range $key, $value := .Values.annotations }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ .Values.frontend.name }}
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.frontend.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range .Values.frontend.env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        {{- if .Values.frontend.livenessProbe }}
+        livenessProbe:
+          {{- toYaml .Values.frontend.livenessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.frontend.readinessProbe }}
+        readinessProbe:
+          {{- toYaml .Values.frontend.readinessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.frontend.resources }}
+        resources:
+          {{- toYaml .Values.frontend.resources | nindent 10 }}
+        {{- end }}
+      restartPolicy: Always

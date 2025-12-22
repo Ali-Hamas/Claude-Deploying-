@@ -1,0 +1,234 @@
+# Default values for todo-app Helm chart
+
+# Backend configuration
+backend:
+  name: backend
+  replicaCount: 2
+
+  image:
+    repository: saimpra786/todo-backend
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+
+  dapr:
+    enabled: true
+    appId: backend
+    appPort: 8000
+    httpPort: 3500
+    grpcPort: 50001
+    logLevel: info
+    componentsPath: /components
+
+  env:
+    - name: BETTER_AUTH_SECRET
+      value: "your-super-secret-key-change-in-production"
+    - name: DATABASE_URL
+      value: "postgresql://user:password@postgres:5432/tododb"
+    - name: DAPR_HTTP_PORT
+      value: "3500"
+    - name: DAPR_GRPC_PORT
+      value: "50001"
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 5
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+# Frontend configuration
+frontend:
+  name: frontend
+  replicaCount: 2
+
+  image:
+    repository: saimpra786/todo-frontend
+    tag: latest
+    pullPolicy: Always
+
+  service:
+    type: LoadBalancer
+    port: 3000
+    targetPort: 3000
+    nodePort: 30080
+
+  dapr:
+    enabled: true
+    appId: frontend
+    appPort: 3000
+    httpPort: 3501
+    grpcPort: 50002
+    logLevel: info
+
+  env:
+    - name: NEXT_PUBLIC_API_URL
+      value: "http://backend:8000"
+    - name: NEXT_PUBLIC_DAPR_HTTP_PORT
+      value: "3501"
+    - name: HOSTNAME
+      value: "0.0.0.0"
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 5
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+
+# PostgreSQL configuration
+postgresql:
+  enabled: false
+  name: postgres
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  env:
+    - name: POSTGRES_DB
+      value: tododb
+    - name: POSTGRES_USER
+      value: user
+    - name: POSTGRES_PASSWORD
+      value: password
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# Kafka configuration (for Dapr pub/sub)
+kafka:
+  enabled: false
+  name: kafka
+  image:
+    repository: bitnami/kafka
+    tag: "latest"
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 9092
+
+  env:
+    - name: KAFKA_CFG_NODE_ID
+      value: "0"
+    - name: KAFKA_CFG_PROCESS_ROLES
+      value: "controller,broker"
+    - name: KAFKA_CFG_LISTENERS
+      value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+    - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+      value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+    - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+      value: "0@kafka:9093"
+    - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+      value: "CONTROLLER"
+
+  persistence:
+    enabled: false
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+  resources:
+    limits:
+      cpu: 300m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+# Dapr components configuration
+dapr:
+  components:
+    # Pub/Sub component
+    pubsub:
+      name: todo-pubsub
+      type: pubsub.kafka
+      version: v1
+      metadata:
+        - name: brokers
+          value: "kafka:9092"
+        - name: consumerGroup
+          value: "todo-chat-bot"
+        - name: clientID
+          value: "todo-chat-bot"
+        - name: authType
+          value: "none"
+
+    # Cron binding component
+    cron:
+      name: reminder-cron
+      type: bindings.cron
+      version: v1
+      metadata:
+        - name: schedule
+          value: "* * * * *"  # Every minute
+        - name: direction
+          value: "input"
+
+# Image pull secrets (if using private registry)
+imagePullSecrets: []
+
+# Global labels
+labels:
+  app.kubernetes.io/name: todo-app
+  app.kubernetes.io/part-of: todo-system
+  app.kubernetes.io/managed-by: helm
+
+# Annotations
+annotations: {}

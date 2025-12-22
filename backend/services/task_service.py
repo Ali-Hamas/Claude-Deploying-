@@ -1,9 +1,19 @@
 from sqlmodel import Session, select
 from typing import List, Optional
-from backend.models.todo_models import Task, TaskStatus
+from backend.models.todo_models import Task, TaskStatus, TaskPriority, TaskRecurrence
 from datetime import datetime
+import json
 
-def create_task(session: Session, title: str, description: Optional[str] = None, user_id: int = 1) -> Task:
+def create_task(
+    session: Session,
+    title: str,
+    description: Optional[str] = None,
+    user_id: int = 1,
+    priority: TaskPriority = TaskPriority.medium,
+    due_date: Optional[datetime] = None,
+    tags: Optional[List[str]] = None,
+    recurrence: Optional[TaskRecurrence] = None
+) -> Task:
     """
     Create a new task in the database
     """
@@ -11,7 +21,11 @@ def create_task(session: Session, title: str, description: Optional[str] = None,
         title=title,
         description=description,
         user_id=user_id,
-        status=TaskStatus.pending
+        status=TaskStatus.pending,
+        priority=priority,
+        due_date=due_date,
+        tags=json.dumps(tags) if tags else "[]",
+        recurrence=recurrence
     )
     session.add(task)
     session.commit()
@@ -30,8 +44,17 @@ def get_tasks(session: Session, user_id: int = 1, status: Optional[TaskStatus] =
     tasks = session.exec(query).all()
     return tasks
 
-def update_task(session: Session, task_id: int, title: Optional[str] = None,
-                description: Optional[str] = None, status: Optional[TaskStatus] = None) -> Optional[Task]:
+def update_task(
+    session: Session,
+    task_id: int,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[TaskStatus] = None,
+    priority: Optional[TaskPriority] = None,
+    due_date: Optional[datetime] = None,
+    tags: Optional[List[str]] = None,
+    recurrence: Optional[TaskRecurrence] = None
+) -> Optional[Task]:
     """
     Update an existing task
     """
@@ -46,6 +69,14 @@ def update_task(session: Session, task_id: int, title: Optional[str] = None,
         task.description = description
     if status is not None:
         task.status = status
+    if priority is not None:
+        task.priority = priority
+    if due_date is not None:
+        task.due_date = due_date
+    if tags is not None:
+        task.tags = json.dumps(tags)
+    if recurrence is not None:
+        task.recurrence = recurrence
 
     task.updated_at = datetime.utcnow()
     session.add(task)

@@ -78,7 +78,28 @@
       "Bash(findstr \".db\")",
       "Bash(ls backend/*.db)",
       "Bash(python -m uvicorn main:app --reload)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(cat:*)",
+      "Bash(Get-Content \"D:\\\\Panavirsty\\\\Phase 51\\\\Todo-Chat-Bot\\\\specs\\\\features\\\\advanced_features.md\")",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(python:*)",
+      "Bash(grep:*)",
+      "Bash(uvicorn:*)",
+      "Bash(\"C:\\\\Users\\\\Kazuma Satou\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -m pip install --upgrade pip)",
+      "Bash(\"C:\\\\Users\\\\Kazuma Satou\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -m pip install python-jose[cryptography] passlib[argon2] argon2-cffi python-dotenv fastapi uvicorn[standard] sqlmodel psycopg2-binary openai openai-agents dapr dapr-ext-fastapi python-multipart alembic mcp)",
+      "Bash(\"C:\\\\Users\\\\Kazuma Satou\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python311\\\\python.exe\" -c \"from jose import jwt; from agents import Agent; import dapr; print\\(''All imports work!''\\)\")",
+      "Bash(curl:*)",
+      "Bash(netstat:*)",
+      "Bash(timeout:*)",
+      "Bash(dapr:*)",
+      "Bash(dir /B \"D:\\\\Panavirsty\\\\Phase 51\\\\Todo-Chat-Bot\\\\dapr\\\\components\")",
+      "Bash(if [ -d \"node_modules\" ])",
+      "Bash(then echo \"Dependencies installed\")",
+      "Bash(else echo \"Dependencies NOT installed - need to run npm install\")",
+      "Bash(fi:*)",
+      "Bash(npm run dev:*)",
+      "Bash(tree:*)"
     ]
   }
 }

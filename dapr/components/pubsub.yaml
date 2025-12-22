@@ -1,0 +1,18 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: todo-pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  - name: brokers
+    value: "localhost:9092"
+  - name: consumerGroup
+    value: "todo-chat-bot"
+  - name: clientID
+    value: "todo-chat-bot"
+  - name: authType
+    value: "none"
+  - name: maxMessageBytes
+    value: "1024"

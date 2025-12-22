@@ -1,0 +1,20 @@
+{{- if and .Values.kafka.enabled .Values.kafka.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-pvc
+  labels:
+    app: {{ .Values.kafka.name }}
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.kafka.persistence.accessMode }}
+  {{- if .Values.kafka.persistence.storageClass }}
+  storageClassName: {{ .Values.kafka.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.kafka.persistence.size }}
+{{- end }}

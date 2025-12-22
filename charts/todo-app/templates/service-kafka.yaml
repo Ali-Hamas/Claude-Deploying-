@@ -1,0 +1,24 @@
+{{- if .Values.kafka.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.kafka.name }}
+  labels:
+    app: {{ .Values.kafka.name }}
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  type: {{ .Values.kafka.service.type }}
+  ports:
+  - port: {{ .Values.kafka.service.port }}
+    targetPort: {{ .Values.kafka.service.port }}
+    protocol: TCP
+    name: kafka
+  - port: 9093
+    targetPort: 9093
+    protocol: TCP
+    name: controller
+  selector:
+    app: {{ .Values.kafka.name }}
+{{- end }}

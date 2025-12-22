@@ -22,7 +22,7 @@ export const registerUser = async (email, password, name) => {
     }
 
     // Store the token in localStorage
-    if (data.access_token) {
+    if (data.access_token && typeof window !== 'undefined') {
       localStorage.setItem('auth_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
     }
@@ -54,7 +54,7 @@ export const loginUser = async (email, password) => {
     }
 
     // Store the token in localStorage
-    if (data.access_token) {
+    if (data.access_token && typeof window !== 'undefined') {
       localStorage.setItem('auth_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
     }
@@ -67,13 +67,18 @@ export const loginUser = async (email, password) => {
 };
 
 export const logoutUser = () => {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('user');
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+  }
 };
 
 export const isAuthenticated = () => {
-  const token = localStorage.getItem('auth_token');
-  return !!token;
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('auth_token');
+    return !!token;
+  }
+  return false;
 };
 
 export const getCurrentUser = () => {

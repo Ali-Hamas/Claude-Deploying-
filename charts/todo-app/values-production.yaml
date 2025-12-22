@@ -1,0 +1,107 @@
+# Production values for todo-app
+# Override default values with production-ready settings
+
+# Backend configuration
+backend:
+  replicaCount: 3  # Higher replica count for HA
+
+  image:
+    repository: your-registry.io/todo-backend
+    tag: v3
+    pullPolicy: Always  # Always pull in production
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+    - name: BETTER_AUTH_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: todo-secrets
+          key: auth-secret
+    - name: DATABASE_URL
+      valueFrom:
+        secretKeyRef:
+          name: todo-secrets
+          key: database-url
+    - name: LOG_LEVEL
+      value: "info"
+    - name: ENVIRONMENT
+      value: "production"
+
+# Frontend configuration
+frontend:
+  replicaCount: 3  # Higher replica count for HA
+
+  image:
+    repository: your-registry.io/todo-frontend
+    tag: v1
+    pullPolicy: Always
+
+  service:
+    type: LoadBalancer  # Use LoadBalancer instead of NodePort in production
+    port: 80
+    targetPort: 3000
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+    - name: NEXT_PUBLIC_API_URL
+      value: "https://api.todo-app.example.com"
+    - name: NODE_ENV
+      value: "production"
+
+# Use external managed PostgreSQL in production
+postgresql:
+  enabled: false  # Disable in-cluster PostgreSQL
+
+# Use external managed Kafka in production
+kafka:
+  enabled: false  # Disable in-cluster Kafka
+
+# Dapr components configuration for production
+dapr:
+  components:
+    pubsub:
+      name: todo-pubsub
+      type: pubsub.kafka
+      version: v1
+      metadata:
+        - name: brokers
+          value: "kafka-prod.example.com:9092"
+        - name: consumerGroup
+          value: "todo-chat-bot-prod"
+        - name: clientID
+          value: "todo-chat-bot-prod"
+        - name: authType
+          value: "mtls"  # Use mTLS in production
+        - name: clientCert
+          valueFrom:
+            secretKeyRef:
+              name: kafka-certs
+              key: client.crt
+        - name: clientKey
+          valueFrom:
+            secretKeyRef:
+              name: kafka-certs
+              key: client.key
+        - name: caCert
+          valueFrom:
+            secretKeyRef:
+              name: kafka-certs
+              key: ca.crt
+
+# Image pull secrets for private registry
+imagePullSecrets:
+  - name: registry-credentials

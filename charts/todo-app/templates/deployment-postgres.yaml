@@ -1,0 +1,52 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.postgresql.name }}
+  labels:
+    app: {{ .Values.postgresql.name }}
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.postgresql.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.postgresql.name }}
+    spec:
+      containers:
+      - name: {{ .Values.postgresql.name }}
+        image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+        imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+        ports:
+        - name: postgres
+          containerPort: {{ .Values.postgresql.service.port }}
+          protocol: TCP
+        env:
+        {{- range .Values.postgresql.env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        {{- if .Values.postgresql.persistence.enabled }}
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+          subPath: pgdata
+        {{- end }}
+        {{- if .Values.postgresql.resources }}
+        resources:
+          {{- toYaml .Values.postgresql.resources | nindent 10 }}
+        {{- end }}
+      {{- if .Values.postgresql.persistence.enabled }}
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      {{- end }}
+{{- end }}

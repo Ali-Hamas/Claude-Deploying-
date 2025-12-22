@@ -1,0 +1,16 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: {{ .Values.dapr.components.cron.name }}
+  labels:
+    {{- range $key, $value := .Values.labels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  type: {{ .Values.dapr.components.cron.type }}
+  version: {{ .Values.dapr.components.cron.version }}
+  metadata:
+  {{- range .Values.dapr.components.cron.metadata }}
+  - name: {{ .name }}
+    value: {{ .value | quote }}
+  {{- end }}

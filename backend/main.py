@@ -1,15 +1,22 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Form, Body
+from fastapi import FastAPI, Depends, HTTPException, status, Form, Body, Request
 from sqlmodel import Session, select
 from typing import List, Dict, Any, Optional
 import os
 import asyncio
+import logging
 
 from db import get_session, engine
 from models.todo_models import Task, TaskCreate, TaskUpdate, TaskRead, User, Conversation, Message, MessageRole
 from tasks_crud import get_user_tasks, get_task_by_id, create_task_for_user, update_task, delete_task
 from auth import get_current_user
 from sqlmodel import SQLModel
+from services.event_service import handle_recurring_task, publish_task_reminder_event
+from datetime import timedelta
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+ 
 app = FastAPI(title="Todo API", version="1.0.0")
 
 # Add CORS middleware
@@ -45,11 +52,12 @@ def create_access_token(data: dict):
 
 def create_tables():
     """
-    Create all database tables
+    Create all database tables if they don't exist.
+    NOTE: Removed drop_all() - that was deleting all users on every restart!
     """
-    # Drop all existing tables and recreate them to ensure correct schema
-    SQLModel.metadata.drop_all(engine)
+    # Only create tables if they don't exist (preserves existing data)
     SQLModel.metadata.create_all(engine)
+
 
 def create_default_users(db: Session):
     """
@@ -134,6 +142,281 @@ class ChatResponse(BaseModel):
     """Response model for the chat endpoint."""
     response: str
     conversation_id: int
+
+# ============================================================================
+# DAPR PUB/SUB ENDPOINTS
+# ============================================================================
+
+@app.get("/dapr/subscribe")
+def dapr_subscribe():
+    """
+    Dapr subscription discovery endpoint.
+    Returns the list of topics and routes that this app subscribes to.
+    """
+    subscriptions = [
+        {
+            "pubsubname": "todo-pubsub",
+            "topic": "task-events",
+            "route": "/api/events/task-completed"
+        },
+        {
+            "pubsubname": "todo-pubsub",
+            "topic": "reminders",
+            "route": "/api/events/task-reminder"
+        }
+    ]
+    logger.info(f"Dapr subscribe endpoint called, returning {len(subscriptions)} subscriptions")
+    return subscriptions
+
+
+@app.post("/api/events/task-completed")
+async def handle_task_completed_event(
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """
+    Dapr subscription endpoint for task completion events.
+
+    When a task is marked as completed and has a recurrence pattern,
+    this endpoint creates a new task with the next due date.
+
+    This endpoint is called by Dapr when events are published to the
+    task-events topic.
+    """
+    try:
+        # Parse the event data from Dapr
+        body = await request.json()
+
+        # Dapr wraps the data in a specific format
+        # The actual event data is in the 'data' field
+        event_data = body.get("data", body)
+
+        logger.info(f"Received task.completed event: {event_data}")
+
+        # Check event type
+        event_type = event_data.get("event_type")
+        if event_type != "task.completed":
+            logger.warning(f"Unexpected event type: {event_type}")
+            return {"status": "ignored", "reason": "unknown event type"}
+
+        # Handle recurring task logic
+        new_task = handle_recurring_task(event_data, db)
+
+        if new_task:
+            return {
+                "status": "success",
+                "message": f"Created recurring task {new_task.id}",
+                "new_task_id": new_task.id
+            }
+        else:
+            return {
+                "status": "success",
+                "message": "Task has no recurrence, no action taken"
+            }
+
+    except Exception as e:
+        logger.error(f"Error handling task.completed event: {str(e)}")
+        # Return 200 even on error to prevent Dapr from retrying
+        # Log the error for debugging
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+def get_or_create_conversation(db: Session, user_id: int) -> Conversation:
+    """
+    Get the most recent conversation for a user, or create a new one if none exists.
+
+    Args:
+        db: Database session
+        user_id: The user ID
+
+    Returns:
+        Conversation: The active conversation for the user
+    """
+    # Try to get the most recent conversation
+    statement = select(Conversation).where(
+        Conversation.user_id == user_id
+    ).order_by(Conversation.updated_at.desc())
+
+    conversation = db.exec(statement).first()
+
+    if not conversation:
+        # Create a new conversation
+        conversation = Conversation(user_id=user_id)
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+        logger.info(f"Created new conversation {conversation.id} for user {user_id}")
+
+    return conversation
+
+
+@app.post("/api/events/task-reminder")
+async def handle_task_reminder_event(
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """
+    Dapr subscription endpoint for task reminder events.
+
+    This endpoint receives reminder events published by the cron job,
+    logs the notification, and stores it in the conversation history.
+
+    This endpoint is called by Dapr when events are published to the
+    reminders topic.
+    """
+    try:
+        # Parse the event data from Dapr
+        body = await request.json()
+
+        # Dapr wraps the data in a specific format
+        # The actual event data is in the 'data' field
+        event_data = body.get("data", body)
+
+        logger.info(f"Received task.reminder event: task_id={event_data.get('task_id')}, due in {event_data.get('minutes_until_due')} minutes")
+
+        # Check event type
+        event_type = event_data.get("event_type")
+        if event_type != "task.reminder":
+            logger.warning(f"Unexpected event type: {event_type}")
+            return {"status": "ignored", "reason": "unknown event type"}
+
+        # Extract event data
+        task_id = event_data.get("task_id")
+        task_title = event_data.get("title")
+        user_id = event_data.get("user_id")
+        minutes = event_data.get("minutes_until_due")
+        due_date = event_data.get("due_date")
+
+        # Log the reminder notification to console
+        logger.info(f"🔔 Sending reminder for Task ID {task_id}")
+        logger.info(f"REMINDER: User {user_id} has task '{task_title}' due in {minutes} minutes")
+
+        # Get or create a conversation for the user
+        conversation = get_or_create_conversation(db, user_id)
+
+        # Create reminder message content
+        if minutes <= 0:
+            time_text = "now"
+        elif minutes == 1:
+            time_text = "in 1 minute"
+        else:
+            time_text = f"in {minutes} minutes"
+
+        reminder_content = f"⏰ REMINDER: Your task '{task_title}' is due {time_text}!"
+
+        # Store the reminder in the conversation history
+        reminder_message = Message(
+            conversation_id=conversation.id,
+            role=MessageRole.assistant,
+            content=reminder_content
+        )
+        db.add(reminder_message)
+
+        # Update conversation timestamp
+        conversation.updated_at = datetime.utcnow()
+        db.add(conversation)
+
+        db.commit()
+
+        logger.info(f"✓ Reminder stored in conversation {conversation.id} for user {user_id}")
+
+        return {
+            "status": "success",
+            "message": f"Reminder processed for task {task_id}",
+            "conversation_id": conversation.id,
+            "reminder_sent": True
+        }
+
+    except Exception as e:
+        logger.error(f"Error handling task.reminder event: {str(e)}")
+        db.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+@app.post("/reminder-cron")
+async def reminder_cron_handler(
+    request: Request,
+    db: Session = Depends(get_session)
+):
+    """
+    Dapr cron binding handler for task reminders.
+
+    Triggered by Dapr cron every minute. Queries the database for
+    incomplete tasks where due_date is in the past (overdue) and
+    reminder_sent is False, publishes reminder events, and marks
+    tasks as reminder_sent.
+
+    This endpoint is called by the Dapr cron binding component.
+    """
+    try:
+        logger.info("Reminder cron triggered")
+
+        # Get current time
+        from datetime import datetime
+        now = datetime.utcnow()
+
+        # Query for pending tasks that are overdue AND reminder_sent = False
+        from models.todo_models import TaskStatus
+        query = select(Task).where(
+            Task.status == TaskStatus.pending,
+            Task.due_date.isnot(None),
+            Task.due_date < now,  # Overdue tasks (due_date in the past)
+            Task.reminder_sent == False  # Only tasks without reminders sent
+        )
+
+        overdue_tasks = db.exec(query).all()
+
+        logger.info(f"Found {len(overdue_tasks)} overdue tasks needing reminders")
+
+        # Publish reminder event for each overdue task and mark as sent
+        reminders_sent = 0
+        for task in overdue_tasks:
+            # Calculate how many minutes overdue
+            time_diff = now - task.due_date
+            minutes_overdue = int(time_diff.total_seconds() / 60)
+
+            # Log reminder message
+            logger.info(f"🔔 Sending Reminder for Task ID {task.id}: '{task.title}' (overdue by {minutes_overdue} minutes)")
+
+            # Publish reminder event to Dapr pub/sub
+            success = await publish_task_reminder_event(task, -minutes_overdue)  # Negative indicates overdue
+
+            if success:
+                # Mark reminder as sent to prevent spam
+                task.reminder_sent = True
+                task.updated_at = datetime.utcnow()
+                db.add(task)
+                reminders_sent += 1
+
+        # Commit all updates
+        db.commit()
+
+        logger.info(f"Published {reminders_sent} task reminder events and marked as sent")
+
+        return {
+            "status": "success",
+            "tasks_found": len(overdue_tasks),
+            "reminders_sent": reminders_sent
+        }
+
+    except Exception as e:
+        logger.error(f"Error in reminder cron handler: {str(e)}")
+        db.rollback()
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
 
 @app.post("/auth/register", response_model=dict)
 def register_user(
@@ -322,16 +605,35 @@ async def chat_with_assistant(
             conversation_id=result["conversation_id"]
         )
     except Exception as e:
+        # Log the error for debugging
+        print(f"Agent error: {str(e)}")
+        
         # Fallback to simple processing if agent fails
-        response_text = process_user_message_fallback(user_message, current_user_id, db)
+        try:
+            response_text = process_user_message_fallback(user_message, current_user_id, db)
+            
+            # Save messages to DB
+            save_chat_messages(db, conversation_id, user_message, response_text)
+            
+            return ChatResponse(
+                response=response_text,
+                conversation_id=conversation_id
+            )
+        except Exception as fallback_error:
+            # If even fallback fails, return a generic response
+            print(f"Fallback error: {str(fallback_error)}")
+            generic_response = f"I received your message: '{user_message}'. I'm having trouble processing it right now. Try 'Add task [name]' or 'List tasks'."
+            
+            try:
+                save_chat_messages(db, conversation_id, user_message, generic_response)
+            except:
+                pass  # Silently fail on DB error
+            
+            return ChatResponse(
+                response=generic_response,
+                conversation_id=conversation_id
+            )
 
-        # Save messages to DB
-        save_chat_messages(db, conversation_id, user_message, response_text)
-
-        return ChatResponse(
-            response=response_text,
-            conversation_id=conversation_id
-        )
 
 
 async def run_agent_for_chat(

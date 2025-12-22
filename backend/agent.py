@@ -15,8 +15,8 @@ from datetime import datetime
 from agents import Agent, Runner, function_tool
 from sqlmodel import Session, select
 
-from backend.database.connection import engine
-from backend.models.todo_models import Task, TaskStatus, Message, MessageRole, Conversation
+from database.connection import engine
+from models.todo_models import Task, TaskStatus, Message, MessageRole, Conversation
 
 
 # =============================================================================
@@ -24,7 +24,7 @@ from backend.models.todo_models import Task, TaskStatus, Message, MessageRole, C
 # =============================================================================
 
 @function_tool
-def add_task(user_id: str, title: str, description: str = "") -> dict:
+def add_task(user_id: str, title: str, description: str = "", due_date: str = None) -> dict:
     """
     Create a new task for the user's todo list.
 
@@ -32,9 +32,10 @@ def add_task(user_id: str, title: str, description: str = "") -> dict:
         user_id: The ID of the user (required)
         title: The title of the task (required)
         description: Optional description of the task
+        due_date: Optional due date/time in ISO 8601 format (e.g., "2025-12-25T15:00:00")
 
     Returns:
-        JSON object containing task_id, status, and title
+        JSON object containing task_id, status, title, and due_date
     """
     with Session(engine) as session:
         try:
@@ -43,11 +44,23 @@ def add_task(user_id: str, title: str, description: str = "") -> dict:
             return {"error": f"Invalid user_id: {user_id}", "status": "error"}
 
         try:
+            # Parse due_date if provided
+            parsed_due_date = None
+            if due_date:
+                try:
+                    parsed_due_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                except (ValueError, AttributeError) as e:
+                    return {
+                        "error": f"Invalid due_date format: {due_date}. Use ISO 8601 format (e.g., 2025-12-25T15:00:00)",
+                        "status": "error"
+                    }
+
             task = Task(
                 title=title,
                 description=description if description else None,
                 user_id=user_id_int,
-                status=TaskStatus.pending
+                status=TaskStatus.pending,
+                due_date=parsed_due_date
             )
             session.add(task)
             session.commit()
@@ -56,7 +69,8 @@ def add_task(user_id: str, title: str, description: str = "") -> dict:
             return {
                 "task_id": task.id,
                 "status": task.status.value,
-                "title": task.title
+                "title": task.title,
+                "due_date": task.due_date.isoformat() if task.due_date else None
             }
         except Exception as e:
             session.rollback()
@@ -142,6 +156,20 @@ def complete_task(user_id: str, task_id: int) -> dict:
             task.updated_at = datetime.utcnow()
             session.add(task)
             session.commit()
+            session.refresh(task)
+
+            # Publish task-completed event for recurring task processing
+            # Run async event publishing in the background
+            import asyncio
+            from services.event_service import publish_task_completed_event
+
+            try:
+                # Try to get the running event loop
+                loop = asyncio.get_running_loop()
+                loop.create_task(publish_task_completed_event(task))
+            except RuntimeError:
+                # No event loop running, create a new one
+                asyncio.run(publish_task_completed_event(task))
 
             return {"status": "completed", "task_id": task.id}
         except Exception as e:
@@ -249,6 +277,19 @@ AGENT_INSTRUCTIONS = """You are a Personal Task Assistant, an AI capable of mana
    - Example: "Add a task to buy milk" -> call add_task with title "Buy milk"
    - Example: "Remind me to call mom tomorrow" -> call add_task with title "Call mom tomorrow"
 
+   **Due Date Extraction:**
+   - **ALWAYS extract and set due_date when the user says "remind me"**
+   - Extract due dates from natural language and convert to ISO 8601 format
+   - Current date/time context: {current_datetime}
+   - Examples:
+     * "Remind me to buy groceries tomorrow at 3pm" -> due_date: tomorrow at 15:00:00
+     * "Add task: meeting on Friday at 2:30pm" -> due_date: next Friday at 14:30:00
+     * "Remind me in 2 hours to call John" -> due_date: current time + 2 hours
+     * "Schedule dentist appointment for December 25th at 10am" -> due_date: 2025-12-25T10:00:00
+   - If time is not specified but date is, default to 9:00 AM
+   - If only relative time is given (e.g., "in 30 minutes"), calculate from current time
+   - If "remind me" is used without time/date, ask the user for clarification
+
 2. **Task Listing:** When asked to show, list, or display tasks, call `list_tasks` with the appropriate status filter.
    - Example: "What do I have to do?" -> call list_tasks with status "pending"
    - Example: "Show all my tasks" -> call list_tasks with status "all"
@@ -263,15 +304,24 @@ AGENT_INSTRUCTIONS = """You are a Personal Task Assistant, an AI capable of mana
 
 5. **Task Updates:** When a user wants to change or update a task's title or description, call `update_task`.
 
+## Date/Time Processing:
+- Parse natural language dates and times intelligently
+- Support formats: "tomorrow", "next Monday", "in 2 hours", "at 3pm", "on Dec 25"
+- Always output dates in ISO 8601 format: YYYY-MM-DDTHH:MM:SS
+- Use 24-hour time format
+- If ambiguous, ask for clarification
+
 ## Response Style:
 - Be friendly and conversational
-- Always confirm actions with clear responses
+- Always confirm actions with clear responses, including due dates when set
 - Summarize task lists in a readable format
 - If an error occurs, explain it clearly and suggest alternatives
+- When a reminder is set, confirm the date/time in human-readable format
 
 ## Important:
 - The user_id will be provided in the context. Always use it for all tool calls.
 - Never expose internal error details to users - keep responses friendly.
+- **CRITICAL: When "remind me" is used, ALWAYS set a due_date parameter in add_task.**
 """
 
 
@@ -374,6 +424,17 @@ class TodoAgentRunner:
         try:
             # Load conversation history
             history = self.load_conversation_history(conversation_id)
+
+            # Get current datetime for the agent context
+            current_dt = datetime.utcnow()
+            current_datetime_str = current_dt.strftime("%Y-%m-%d %H:%M:%S UTC (Day: %A)")
+
+            # Update agent instructions with current datetime
+            instructions_with_time = self.agent.instructions.replace(
+                "{current_datetime}",
+                current_datetime_str
+            )
+            self.agent.instructions = instructions_with_time
 
             # Prepare input with user context
             context_input = f"[User ID: {self.user_id}]\n{user_input}"

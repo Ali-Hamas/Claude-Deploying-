@@ -1,0 +1,88 @@
+# Development values for todo-app
+# Minimal resource allocation for local development
+
+# Backend configuration
+backend:
+  replicaCount: 1  # Single replica for development
+
+  image:
+    repository: todo-backend
+    tag: v3
+    pullPolicy: IfNotPresent  # Don't pull if already exists
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  env:
+    - name: BETTER_AUTH_SECRET
+      value: "dev-secret-key"
+    - name: DATABASE_URL
+      value: "postgresql://user:password@postgres:5432/tododb"
+    - name: LOG_LEVEL
+      value: "debug"
+    - name: ENVIRONMENT
+      value: "development"
+
+# Frontend configuration
+frontend:
+  replicaCount: 1  # Single replica for development
+
+  image:
+    repository: todo-frontend
+    tag: v1
+    pullPolicy: IfNotPresent
+
+  service:
+    type: NodePort
+    port: 3000
+    targetPort: 3000
+    nodePort: 30080
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  env:
+    - name: NEXT_PUBLIC_API_URL
+      value: "http://localhost:8000"
+    - name: NODE_ENV
+      value: "development"
+
+# Use in-cluster PostgreSQL for development
+postgresql:
+  enabled: true
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  persistence:
+    enabled: false  # No persistence needed in dev
+
+# Use in-cluster Kafka for development
+kafka:
+  enabled: true
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+  persistence:
+    enabled: false  # No persistence needed in dev

@@ -686,6 +686,12 @@ def process_user_message_fallback(message: str, user_id: str, db: Session) -> st
     Uses simple pattern matching for basic task operations.
     """
     message_lower = message.lower()
+    
+    # Ensure user_id is an integer for DB operations
+    try:
+        user_id_int = int(user_id)
+    except ValueError:
+        return "Error: Invalid user ID."
 
     # Handle task-related commands
     if "add task" in message_lower or "create task" in message_lower:
@@ -694,11 +700,11 @@ def process_user_message_fallback(message: str, user_id: str, db: Session) -> st
             return "Please specify what task you'd like to add. For example: 'Add task Buy groceries'"
 
         task_data = TaskCreate(title=task_title, description="Added via chat")
-        task = create_task_for_user(db, task_data, user_id)
+        task = create_task_for_user(db, task_data, user_id_int)
         return f"Task '{task.title}' has been added successfully!"
 
     elif "list task" in message_lower or "show task" in message_lower or "my task" in message_lower:
-        tasks = get_user_tasks(db, user_id, "all")
+        tasks = get_user_tasks(db, user_id_int, "all")
         if not tasks:
             return "You don't have any tasks yet. Try adding one!"
 
@@ -714,10 +720,10 @@ def process_user_message_fallback(message: str, user_id: str, db: Session) -> st
         task_id_match = re.search(r'\d+', message)
         if task_id_match:
             task_id = int(task_id_match.group())
-            task = get_task_by_id(db, task_id, user_id)
+            task = get_task_by_id(db, task_id, user_id_int)
             if task:
                 task_update = TaskUpdate(status="completed")
-                updated_task = update_task(db, task_id, user_id, task_update)
+                updated_task = update_task(db, task_id, user_id_int, task_update)
                 if updated_task:
                     return f"Task '{updated_task.title}' has been marked as completed!"
                 return f"Failed to update task {task_id}."
@@ -729,9 +735,9 @@ def process_user_message_fallback(message: str, user_id: str, db: Session) -> st
         task_id_match = re.search(r'\d+', message)
         if task_id_match:
             task_id = int(task_id_match.group())
-            task = get_task_by_id(db, task_id, user_id)
+            task = get_task_by_id(db, task_id, user_id_int)
             if task:
-                success = delete_task(db, task_id, user_id)
+                success = delete_task(db, task_id, user_id_int)
                 if success:
                     return f"Task '{task.title}' has been deleted successfully!"
                 return f"Failed to delete task {task_id}."

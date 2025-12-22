@@ -4,7 +4,7 @@ from models.todo_models import Task, TaskCreate, TaskUpdate, TaskRead, TaskStatu
 from datetime import datetime
 import json
 
-def get_user_tasks(db: Session, user_id: str, status_filter: str = "all") -> List[TaskRead]:
+def get_user_tasks(db: Session, user_id: int, status_filter: str = "all") -> List[TaskRead]:
     """
     Get all tasks for a user, optionally filtered by status
     """
@@ -35,14 +35,14 @@ def get_user_tasks(db: Session, user_id: str, status_filter: str = "all") -> Lis
                 updated_at=task.updated_at
             ) for task in tasks]
 
-def get_task_by_id(db: Session, task_id: int, user_id: str) -> Optional[Task]:
+def get_task_by_id(db: Session, task_id: int, user_id: int) -> Optional[Task]:
     """
     Get a specific task by ID for a user
     """
     query = select(Task).where(Task.id == task_id).where(Task.user_id == user_id)
     return db.exec(query).first()
 
-def create_task_for_user(db: Session, task_data: TaskCreate, user_id: str) -> TaskRead:
+def create_task_for_user(db: Session, task_data: TaskCreate, user_id: int) -> TaskRead:
     """
     Create a new task for a user and publish task.created event
     """
@@ -91,7 +91,7 @@ def create_task_for_user(db: Session, task_data: TaskCreate, user_id: str) -> Ta
         updated_at=task.updated_at
     )
 
-def update_task(db: Session, task_id: int, user_id: str, task_update: TaskUpdate) -> Optional[TaskRead]:
+def update_task(db: Session, task_id: int, user_id: int, task_update: TaskUpdate) -> Optional[TaskRead]:
     """
     Update a task for a user and publish task.updated or task.completed event
     """
@@ -163,7 +163,7 @@ def update_task(db: Session, task_id: int, user_id: str, task_update: TaskUpdate
         updated_at=task.updated_at
     )
 
-def delete_task(db: Session, task_id: int, user_id: str) -> bool:
+def delete_task(db: Session, task_id: int, user_id: int) -> bool:
     """
     Delete a task for a user
     """

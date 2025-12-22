@@ -1,0 +1,22 @@
+# Ignore Git
+.git
+.gitignore
+
+# Ignore Python Cache & Virtual Envs
+__pycache__
+venv
+env
+.env
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Node Modules (Frontend)
+node_modules
+npm-debug.log
+.next
+out
+build
+
+# Ignore VS Code settings
+.vscode

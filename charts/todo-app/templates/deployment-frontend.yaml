@@ -21,7 +21,7 @@ spec:
         {{- end }}
       annotations:
         # Dapr sidecar annotations
-        dapr.io/enabled: "true"
+        dapr.io/enabled: "{{ .Values.frontend.dapr.enabled }}"
         dapr.io/app-id: "{{ .Values.frontend.dapr.appId }}"
         dapr.io/app-port: "{{ .Values.frontend.dapr.appPort }}"
         dapr.io/http-port: "{{ .Values.frontend.dapr.httpPort }}"

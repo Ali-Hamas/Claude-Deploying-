@@ -36,7 +36,7 @@ export const useChat = () => {
       }
 
       // Use the same API base URL pattern as auth functions
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://4.210.13.139:8000';
 
       // Send message to backend API with authorization
       const response = await fetch(`${API_BASE_URL}/api/chat`, {

@@ -1,5 +1,5 @@
 // Auth utility functions for the frontend
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://4.210.13.139:8000';
 
 export const registerUser = async (email, password, name) => {
   try {
